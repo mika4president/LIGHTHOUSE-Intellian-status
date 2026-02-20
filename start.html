@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Start</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0f1419;
+            color: #e6edf3;
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+        .content-page {
+            max-width: 600px;
+        }
+        .content-page p {
+            color: #8b949e;
+        }
+        /* Video overlay: fullscreen, verbergt body bij ENTER */
+        .video-overlay {
+            visibility: hidden;
+            opacity: 0;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: #000;
+            align-items: center;
+            justify-content: center;
+            display: flex;
+            transition: opacity 0.2s;
+        }
+        .video-overlay.active {
+            visibility: visible;
+            opacity: 1;
+        }
+        .video-overlay video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        body.video-visible .content-page {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="video-overlay" id="videoOverlay" aria-hidden="true">
+        <video id="fullscreenVideo" src="http://192.168.10.177/f10.mp4" controls playsinline></video>
+    </div>
+    <div class="content-page">
+        <h1>Start</h1>
+        <p>Druk op <strong>Enter</strong> om de video af te spelen. Escape of nogmaals Enter om te sluiten.</p>
+    </div>
+
+    <script>
+    (function () {
+        var videoUrl = 'http://192.168.10.177/f10.mp4';
+        var overlay = document.getElementById('videoOverlay');
+        var video = document.getElementById('fullscreenVideo');
+        if (!overlay || !video) return;
+
+        function showVideo() {
+            document.body.classList.add('video-visible');
+            overlay.classList.add('active');
+            overlay.setAttribute('aria-hidden', 'false');
+            video.src = videoUrl;
+            video.play().catch(function () {});
+        }
+
+        function hideVideo() {
+            document.body.classList.remove('video-visible');
+            overlay.classList.remove('active');
+            overlay.setAttribute('aria-hidden', 'true');
+            video.pause();
+        }
+
+        function toggleVideo() {
+            if (overlay.classList.contains('active')) {
+                hideVideo();
+            } else {
+                showVideo();
+            }
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (e.repeat) return;
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleVideo();
+            }
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                e.preventDefault();
+                if (overlay.classList.contains('active')) hideVideo();
+            }
+        });
+    })();
+    </script>
+</body>
+</html>
