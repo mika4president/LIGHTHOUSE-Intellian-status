@@ -27,6 +27,7 @@ $pageTitle = 'Lighthouse – Schotelstatus';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <style>
         :root {
             --bg: #0f1419;
@@ -126,6 +127,17 @@ $pageTitle = 'Lighthouse – Schotelstatus';
             color: var(--muted);
         }
         .refresh a { color: var(--muted); }
+        .ship-map-wrap {
+            margin-top: 0.75rem;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .ship-map {
+            width: 100%;
+            height: 220px;
+            background: var(--bg);
+        }
     </style>
 </head>
 <body>
@@ -137,13 +149,24 @@ $pageTitle = 'Lighthouse – Schotelstatus';
         <p class="empty">Nog geen status ontvangen. Zet op elk schip <code>BACKEND_URL</code> naar deze server (<code>lighthouse/post-status.php</code>) en run het script (of cron). <a href="lighthouse/">Status per schip</a></p>
     <?php else: ?>
         <div class="ships">
-            <?php foreach ($ships as $shipData): ?>
+            <?php $shipIndex = 0; foreach ($ships as $shipData): ?>
                 <?php
                 $name = isset($shipData['ship']) ? $shipData['ship'] : 'Onbekend';
                 $lastUpdate = isset($shipData['last_update']) ? $shipData['last_update'] : '–';
                 $position = isset($shipData['ship_position']) && $shipData['ship_position'] !== null && $shipData['ship_position'] !== '' ? $shipData['ship_position'] : null;
                 $sourceIp = isset($shipData['source_ip']) && $shipData['source_ip'] !== '' ? $shipData['source_ip'] : null;
                 $devices = isset($shipData['devices']) && is_array($shipData['devices']) ? $shipData['devices'] : [];
+                $coords = null;
+                if ($position !== null && $position !== '' && stripos($position, 'N/A') === false) {
+                    $parts = array_map('trim', explode(',', $position));
+                    if (count($parts) >= 2) {
+                        $lat = filter_var($parts[0], FILTER_VALIDATE_FLOAT);
+                        $lon = filter_var($parts[1], FILTER_VALIDATE_FLOAT);
+                        if ($lat !== false && $lon !== false && $lat >= -90 && $lat <= 90 && $lon >= -180 && $lon <= 180) {
+                            $coords = ['lat' => (float)$lat, 'lon' => (float)$lon];
+                        }
+                    }
+                }
                 ?>
                 <section class="ship">
                     <div class="ship-header">
@@ -187,13 +210,32 @@ $pageTitle = 'Lighthouse – Schotelstatus';
                                 </tbody>
                             </table>
                         <?php endif; ?>
+                        <?php if ($coords !== null): ?>
+                            <div class="ship-map-wrap">
+                                <div id="ship-map-<?php echo $shipIndex; ?>" class="ship-map" data-lat="<?php echo $coords['lat']; ?>" data-lon="<?php echo $coords['lon']; ?>" data-name="<?php echo htmlspecialchars($name); ?>"></div>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </section>
-            <?php endforeach; ?>
+            <?php $shipIndex++; endforeach; ?>
         </div>
     <?php endif; ?>
 
     <p class="refresh">Pagina vernieuwen: <a href="<?php echo htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'index.php'); ?>">herladen</a> · <a href="lighthouse/">Status per schip</a></p>
     </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+    document.querySelectorAll('.ship-map').forEach(function(el) {
+        var lat = parseFloat(el.getAttribute('data-lat'));
+        var lon = parseFloat(el.getAttribute('data-lon'));
+        var name = el.getAttribute('data-name') || 'Schip';
+        if (isNaN(lat) || isNaN(lon)) return;
+        var map = L.map(el).setView([lat, lon], 17);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+        L.marker([lat, lon]).addTo(map).bindPopup(name);
+    });
+    </script>
 </body>
 </html>
