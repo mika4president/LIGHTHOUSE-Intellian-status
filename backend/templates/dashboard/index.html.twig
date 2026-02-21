@@ -1,0 +1,382 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Lighthouse – Schotelstatus{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0e12;
+            --bg-card: #111820;
+            --card: #1a2332;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --ok: #3fb950;
+            --warn: #d29922;
+            --err: #f85149;
+            --border: #30363d;
+            --accent: #58a6ff;
+            --beam: linear-gradient(180deg, rgba(88, 166, 255, 0.06) 0%, transparent 60%);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+            min-height: 100vh;
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 280px;
+            background: var(--beam);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .wrap { position: relative; z-index: 1; padding: 1.5rem 1.5rem 2rem; max-width: 960px; margin: 0 auto; }
+        h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 2.5rem;
+            letter-spacing: 0.08em;
+            font-weight: 400;
+            margin: 0 0 0.25rem;
+            color: var(--text);
+            text-shadow: 0 0 40px rgba(88, 166, 255, 0.15);
+        }
+        .meta {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+        .meta a { color: var(--accent); text-decoration: none; }
+        .meta a:hover { text-decoration: underline; }
+        .kpi-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .kpi {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            text-align: center;
+            backdrop-filter: blur(8px);
+        }
+        .kpi-value { font-size: 1.75rem; font-weight: 600; color: var(--text); }
+        .kpi-value.ok { color: var(--ok); }
+        .kpi-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+        .ships { display: grid; gap: 1.25rem; }
+        .ship {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            backdrop-filter: blur(6px);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+        }
+        .ship-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .ship-name { font-size: 1.2rem; color: var(--text); }
+        .ship-update { font-size: 0.8rem; font-weight: normal; color: var(--muted); }
+        .ship-meta { font-size: 0.8rem; color: var(--muted); width: 100%; margin-top: 0.35rem; }
+        .ship-meta span { margin-right: 1rem; }
+        .devices { padding: 1rem 1.25rem; }
+        .devices table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .devices th, .devices td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+        .devices th { color: var(--muted); font-weight: 500; }
+        .devices tr:last-child td { border-bottom: none; }
+        .status { font-weight: 500; }
+        .status-tracking { color: var(--ok); }
+        .status-idle, .status-unlock { color: var(--muted); }
+        .status-searching, .status-wrapping { color: var(--warn); }
+        .status-offline, .status-error, .status-unknown { color: var(--err); }
+        .empty { color: var(--muted); padding: 2rem; text-align: center; }
+        .ship-map-wrap { margin-top: 1rem; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+        .ship-map { width: 100%; height: 220px; background: var(--bg); }
+        .line-of-sight {
+            margin-top: 1rem;
+            padding: 1.25rem;
+            background: rgba(17, 24, 32, 0.8);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .line-of-sight h3 { font-size: 0.95rem; margin: 0 0 0.75rem; color: var(--muted); }
+        .los-content { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+        .los-compass { width: 140px; height: 140px; flex-shrink: 0; }
+        .los-compass svg { width: 100%; height: 100%; }
+        .los-values { font-size: 0.9rem; }
+        .los-values p { margin: 0.25rem 0; }
+        .los-values strong { color: var(--ok); }
+        .refresh { font-size: 0.85rem; color: var(--muted); margin-top: 2rem; }
+        .refresh a { color: var(--accent); text-decoration: none; }
+        .refresh a:hover { text-decoration: underline; }
+        .age { color: var(--muted); font-weight: normal; }
+        .search-form { margin-bottom: 1.5rem; }
+        .search-form form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .search-form input[type="search"] {
+            flex: 1;
+            min-width: 200px;
+            padding: 0.6rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card);
+            color: var(--text);
+            font-size: 1rem;
+        }
+        .search-form input[type="search"]::placeholder { color: var(--muted); }
+        .search-form input[type="search"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+        .search-form button {
+            padding: 0.6rem 1.2rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+        .search-form button:hover { background: var(--border); }
+        .search-form a.clear-search {
+            color: var(--muted);
+            font-size: 0.9rem;
+            text-decoration: none;
+        }
+        .search-form a.clear-search:hover { color: var(--accent); text-decoration: underline; }
+        .search-meta { color: var(--muted); font-size: 0.9rem; margin-top: 0.35rem; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+{% endblock %}
+
+{% block body %}
+<div class="wrap">
+    <h1>Lighthouse</h1>
+    <p class="meta">Schotelstatus van alle schepen. <a href="{{ path('admin') }}">Admin</a></p>
+
+    <div class="search-form">
+        <form method="get" action="{{ path('app_dashboard_index') }}" role="search" id="dashboard-search-form">
+            <label for="dashboard-search" class="visually-hidden">Zoek op scheepsnaam</label>
+            <input type="search" id="dashboard-search" name="q" value="{{ search|e('html_attr') }}" placeholder="Zoek op scheepsnaam…" autocomplete="off">
+            <a href="{{ path('app_dashboard_index') }}" class="clear-search" id="clear-search-link" style="display: none;">Filter wissen</a>
+        </form>
+        <p class="search-meta" id="search-meta" style="display: none;">Toont <span id="visible-count">0</span> van <span id="total-count">{{ countShips }}</span> schepen.</p>
+    </div>
+
+    <div class="kpi-strip">
+        <div class="kpi">
+            <div class="kpi-value" id="kpi-ship-count">{{ countShips }}</div>
+            <div class="kpi-label" id="kpi-ship-label">Schepen</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value {% if countOnline > 0 %}ok{% endif %}">{{ countOnline }}</div>
+            <div class="kpi-label">Nu online (&lt;15 min)</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value ok">{{ countTracking }}</div>
+            <div class="kpi-label">Schotels tracking</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-value">{{ countPushesToday }}</div>
+            <div class="kpi-label">Pushes vandaag</div>
+        </div>
+    </div>
+
+    {% if shipsWithLatest is empty %}
+        <p class="empty">Nog geen status ontvangen. Stel op elk schip <code>BACKEND_URL</code> in op deze server (<code>{{ url('api_status_post') }}</code>) en run het script (of cron).</p>
+    {% else %}
+        <div class="ships">
+            {% for row in shipsWithLatest %}
+                {% set ship = row.ship %}
+                {% set latest = row.latest %}
+                {% set devices = latest.devices %}
+                {% set position = latest.shipPosition %}
+                {% set coords = row.coords %}
+                {% set receivedAt = latest.receivedAt %}
+                {% set age = row.age %}
+
+                <section class="ship" data-ship-index="{{ loop.index0 }}" data-ship-name="{{ ship.naam|e('html_attr') }}">
+                    <div class="ship-header">
+                        <span class="ship-name">{{ ship.naam }}</span>
+                        <span class="ship-update">Laatste update: {{ receivedAt ? receivedAt|date('d-m-Y H:i') : '–' }}{% if age is not null %} <span class="age">({{ age }} min geleden)</span>{% endif %}</span>
+                        {% if latest.sourceIp %}
+                            <span class="ship-meta"><span>WAN-IP: {{ latest.sourceIp }}</span></span>
+                        {% endif %}
+                        {% if position %}
+                            <span class="ship-meta"><span>Positie: {{ position }}</span></span>
+                        {% endif %}
+                    </div>
+                    <div class="devices">
+                        {% if devices is empty %}
+                            <p class="empty">Geen devices</p>
+                        {% else %}
+                            <table>
+                                <thead>
+                                    <tr><th>Schotel</th><th>IP</th><th>Status</th></tr>
+                                </thead>
+                                <tbody>
+                                    {% for devName, dev in devices %}
+                                        {% set status = dev.status is defined ? dev.status : '–' %}
+                                        {% set statusClass = 'status' %}
+                                        {% if 'TRACKING' in status|upper %} {% set statusClass = statusClass ~ ' status-tracking' %}
+                                        {% elseif 'IDLE' in status|upper or 'UNLOCK' in status|upper %} {% set statusClass = statusClass ~ ' status-idle' %}
+                                        {% elseif 'SEARCHING' in status|upper or 'WRAPPING' in status|upper %} {% set statusClass = statusClass ~ ' status-searching' %}
+                                        {% else %} {% set statusClass = statusClass ~ ' status-offline' %}
+                                        {% endif %}
+                                        <tr>
+                                            <td>{{ devName }}</td>
+                                            <td>{{ dev.ip is defined ? dev.ip : '–' }}</td>
+                                            <td class="{{ statusClass }}">{{ status }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% endif %}
+                        {% if coords is not null %}
+                            <div class="ship-map-wrap">
+                                <div class="ship-map" id="ship-map-{{ loop.index0 }}" data-lat="{{ coords.lat }}" data-lon="{{ coords.lon }}" data-name="{{ ship.naam|e('html_attr') }}"></div>
+                            </div>
+                            <div class="line-of-sight" id="los-{{ loop.index0 }}" data-lat="{{ coords.lat }}" data-lon="{{ coords.lon }}">
+                                <h3>Line-of-sight Astra 1 (19.2°E)</h3>
+                                <div class="los-content">
+                                    <div class="los-compass">
+                                        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="50" cy="50" r="45" fill="none" stroke="var(--border)" stroke-width="1.5"/>
+                                            <text x="50" y="18" text-anchor="middle" fill="var(--muted)" font-size="12" font-weight="600">N</text>
+                                            <text x="82" y="54" text-anchor="middle" fill="var(--muted)" font-size="10">E</text>
+                                            <text x="50" y="88" text-anchor="middle" fill="var(--muted)" font-size="10">Z</text>
+                                            <text x="16" y="54" text-anchor="middle" fill="var(--muted)" font-size="10">W</text>
+                                            <line id="los-needle-{{ loop.index0 }}" x1="50" y1="50" x2="50" y2="15" stroke="var(--ok)" stroke-width="2.5" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div class="los-values">
+                                        <p><strong id="los-az-{{ loop.index0 }}">–</strong> azimuth (richting schotel)</p>
+                                        <p><strong id="los-el-{{ loop.index0 }}">–</strong> elevatie (hoogte boven horizon)</p>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </section>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <p class="refresh">Pagina <a href="{{ path('app_dashboard_index') }}">vernieuwen</a> · Auto-refresh over 60 sec. · <a href="{{ path('admin') }}">Admin</a></p>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+    (function() {
+        var input = document.getElementById('dashboard-search');
+        var clearLink = document.getElementById('clear-search-link');
+        var searchMeta = document.getElementById('search-meta');
+        var visibleCountEl = document.getElementById('visible-count');
+        var totalCountEl = document.getElementById('total-count');
+        var kpiShipCount = document.getElementById('kpi-ship-count');
+        var kpiShipLabel = document.getElementById('kpi-ship-label');
+        var ships = document.querySelectorAll('.ship');
+        var baseUrl = '{{ path('app_dashboard_index') }}';
+
+        function applyFilter(q) {
+            q = (q || '').trim().toLowerCase();
+            var visible = 0;
+            ships.forEach(function(ship) {
+                var name = (ship.getAttribute('data-ship-name') || '').toLowerCase();
+                var show = q === '' || name.indexOf(q) !== -1;
+                ship.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+            if (visibleCountEl) visibleCountEl.textContent = visible;
+            if (kpiShipCount) kpiShipCount.textContent = visible;
+            if (kpiShipLabel) kpiShipLabel.textContent = q === '' ? 'Schepen' : 'Schepen (gefilterd)';
+            if (clearLink) clearLink.style.display = q === '' ? 'none' : '';
+            if (searchMeta) searchMeta.style.display = q === '' ? 'none' : '';
+            var newUrl = q === '' ? baseUrl : baseUrl + (baseUrl.indexOf('?') !== -1 ? '&' : '?') + 'q=' + encodeURIComponent(q);
+            if (window.history && window.history.replaceState) window.history.replaceState(null, '', newUrl);
+        }
+
+        if (input) {
+            input.addEventListener('input', function() { applyFilter(input.value); });
+            input.addEventListener('keyup', function() { applyFilter(input.value); });
+            if (input.value) applyFilter(input.value);
+        }
+        var form = document.getElementById('dashboard-search-form');
+        if (form) form.addEventListener('submit', function(e) { e.preventDefault(); if (input) applyFilter(input.value); });
+    })();
+    document.querySelectorAll('.ship-map').forEach(function(el) {
+        var lat = parseFloat(el.getAttribute('data-lat'));
+        var lon = parseFloat(el.getAttribute('data-lon'));
+        var name = el.getAttribute('data-name') || 'Schip';
+        if (isNaN(lat) || isNaN(lon)) return;
+        var map = L.map(el).setView([lat, lon], 17);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+        L.marker([lat, lon]).addTo(map).bindPopup(name);
+    });
+    (function() {
+        var ASTRA1_LON = 19.2;
+        function toRad(d) { return d * Math.PI / 180; }
+        function toDeg(r) { return r * 180 / Math.PI; }
+        function elevationAzimuth(lat, lon) {
+            var latRad = toRad(lat);
+            var dLonRad = toRad(ASTRA1_LON - lon);
+            var cosLat = Math.cos(latRad);
+            var cosD = Math.cos(dLonRad);
+            var ratio = 6371 / 42164;
+            var N = cosLat * cosD - ratio;
+            var D = Math.sqrt(1 - cosLat * cosLat * cosD * cosD);
+            var elRad = Math.atan2(N, D);
+            var el = toDeg(elRad);
+            var tanEl = Math.tan(elRad);
+            var azRad = Math.atan2(Math.sin(dLonRad), cosLat * tanEl / cosD - Math.tan(latRad));
+            var az = toDeg(azRad);
+            if (az < 0) az += 360;
+            return { elevation: el, azimuth: az };
+        }
+        document.querySelectorAll('.line-of-sight').forEach(function(block) {
+            var lat = parseFloat(block.getAttribute('data-lat'));
+            var lon = parseFloat(block.getAttribute('data-lon'));
+            if (isNaN(lat) || isNaN(lon)) return;
+            var id = block.id.replace('los-', '');
+            var needle = document.getElementById('los-needle-' + id);
+            var azEl = document.getElementById('los-az-' + id);
+            var elEl = document.getElementById('los-el-' + id);
+            var angles = elevationAzimuth(lat, lon);
+            if (needle) needle.setAttribute('transform', 'rotate(' + angles.azimuth + ' 50 50)');
+            if (azEl) azEl.textContent = Math.round(angles.azimuth) + '°';
+            if (elEl) {
+                elEl.textContent = angles.elevation < 0 ? 'onder horizon (niet zichtbaar)' : Math.round(angles.elevation) + '°';
+                if (angles.elevation < 0) elEl.style.color = 'var(--muted)';
+            }
+        });
+    })();
+    setTimeout(function() { window.location.reload(); }, 60000);
+    </script>
+{% endblock %}

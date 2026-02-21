@@ -1,0 +1,80 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}Dashboard{% endblock %}
+
+{% block main %}
+    <div class="p-4">
+        <div class="row mb-4 g-3">
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase small mb-1">Schepen</h6>
+                        <h2 class="mb-0">{{ countShips }}</h2>
+                        <a href="{{ shipIndexUrl }}" class="small">Bekijk alle schepen →</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase small mb-1">Pushes vandaag</h6>
+                        <h2 class="mb-0">{{ countPushesToday }}</h2>
+                        <a href="{{ scheepsdataIndexUrl }}" class="small">Bekijk alle scheepsdata →</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h6 class="text-muted text-uppercase small mb-1">Schotels tracking</h6>
+                        <h2 class="mb-0 text-success">{{ countTracking }}</h2>
+                        <span class="small">Laatste status per schip</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h5 class="mt-4 mb-2">Laatste scheepsdata</h5>
+        {% if recentWithUrls is empty %}
+            <p class="text-muted">Nog geen scheepsdata. Stuur een POST naar <code>/api/status</code> of <a href="{{ path('app_dashboard_index') }}">bekijk het schotelstatus-dashboard</a>.</p>
+        {% else %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Schip</th>
+                            <th>Ontvangen</th>
+                            <th>Positie</th>
+                            <th>Devices</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in recentWithUrls %}
+                            {% set sd = row.entity %}
+                            <tr>
+                                <td>
+                                    {% if sd.ship %}
+                                        <strong>{{ sd.ship.naam }}</strong>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>{{ sd.receivedAt ? sd.receivedAt|date('d-m-Y H:i') : '—' }}</td>
+                                <td>{{ sd.shipPosition ?? '—' }}</td>
+                                <td>{{ sd.devices|length }} device(s)</td>
+                                <td>
+                                    <a href="{{ row.detailUrl }}" class="btn btn-sm btn-outline-primary">Detail</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-2">
+                <a href="{{ scheepsdataIndexUrl }}" class="btn btn-primary">Alle scheepsdata bekijken</a>
+                <a href="{{ path('app_dashboard_index') }}" class="btn btn-outline-secondary ms-2">Schotelstatus-dashboard</a>
+            </p>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{
+    "AmaStella": {
+        "ship": "AmaStella",
+        "last_update": "2026-02-20 20:52:43",
+        "ship_position": "51.85334,6.098573",
+        "devices": {
+            "T12 Anuvu": {
+                "status": "TRACKING (LOCKED)",
+                "ip": "10.15.2.181"
+            },
+            "Astra 1": {
+                "status": "OFFLINE",
+                "ip": "10.15.2.180"
+            }
+        }
+    }
+}

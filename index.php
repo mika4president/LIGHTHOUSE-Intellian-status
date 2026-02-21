@@ -48,10 +48,24 @@ $pageTitle = 'Lighthouse – Schotelstatus';
             padding: 1.5rem;
             line-height: 1.5;
         }
+        .page-header {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 1rem;
+        }
+        .page-header .app-icon {
+            width: 28px;
+            height: 28px;
+            object-fit: contain;
+            transform: rotate(-6deg);
+            opacity: 0.85;
+            flex-shrink: 0;
+        }
         h1 {
             font-size: 1.5rem;
             font-weight: 600;
-            margin: 0 0 1rem;
+            margin: 0;
             color: var(--text);
         }
         .meta {
@@ -138,11 +152,53 @@ $pageTitle = 'Lighthouse – Schotelstatus';
             height: 220px;
             background: var(--bg);
         }
+        .line-of-sight {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .line-of-sight h3 {
+            font-size: 0.95rem;
+            margin: 0 0 0.75rem;
+            color: var(--muted);
+        }
+        .los-content {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .los-compass {
+            width: 140px;
+            height: 140px;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .los-compass svg {
+            width: 100%;
+            height: 100%;
+        }
+        .los-values {
+            font-size: 0.9rem;
+        }
+        .los-values p {
+            margin: 0.25rem 0;
+        }
+        .los-values strong {
+            color: var(--ok);
+        }
     </style>
 </head>
 <body>
     <div class="status-page">
-    <h1><?php echo htmlspecialchars($pageTitle); ?></h1>
+    <header class="page-header">
+        <?php if (file_exists(__DIR__ . '/appicon.png')): ?>
+        <img src="appicon.png" alt="" class="app-icon" width="28" height="28">
+        <?php endif; ?>
+        <h1><?php echo htmlspecialchars($pageTitle); ?></h1>
+    </header>
     <p class="meta">Overzicht van alle schepen en hun Intellian-schotelstatus. <a href="lighthouse/">Status per schip (laatste + hoe lang geleden)</a></p>
 
     <?php if (empty($ships)): ?>
@@ -214,6 +270,25 @@ $pageTitle = 'Lighthouse – Schotelstatus';
                             <div class="ship-map-wrap">
                                 <div id="ship-map-<?php echo $shipIndex; ?>" class="ship-map" data-lat="<?php echo $coords['lat']; ?>" data-lon="<?php echo $coords['lon']; ?>" data-name="<?php echo htmlspecialchars($name); ?>"></div>
                             </div>
+                            <div class="line-of-sight" id="los-<?php echo $shipIndex; ?>" data-lat="<?php echo $coords['lat']; ?>" data-lon="<?php echo $coords['lon']; ?>">
+                                <h3>Line-of-sight Astra 1 (19.2°E)</h3>
+                                <div class="los-content">
+                                    <div class="los-compass">
+                                        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                            <circle cx="50" cy="50" r="45" fill="none" stroke="var(--border)" stroke-width="1.5"/>
+                                            <text x="50" y="18" text-anchor="middle" fill="var(--muted)" font-size="12" font-weight="600">N</text>
+                                            <text x="82" y="54" text-anchor="middle" fill="var(--muted)" font-size="10">E</text>
+                                            <text x="50" y="88" text-anchor="middle" fill="var(--muted)" font-size="10">Z</text>
+                                            <text x="16" y="54" text-anchor="middle" fill="var(--muted)" font-size="10">W</text>
+                                            <line id="los-needle-<?php echo $shipIndex; ?>" x1="50" y1="50" x2="50" y2="15" stroke="var(--ok)" stroke-width="2.5" stroke-linecap="round"/>
+                                        </svg>
+                                    </div>
+                                    <div class="los-values">
+                                        <p><strong id="los-az-<?php echo $shipIndex; ?>">–</strong> azimuth (richting schotel)</p>
+                                        <p><strong id="los-el-<?php echo $shipIndex; ?>">–</strong> elevatie (hoogte boven horizon)</p>
+                                    </div>
+                                </div>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </section>
@@ -236,6 +311,46 @@ $pageTitle = 'Lighthouse – Schotelstatus';
         }).addTo(map);
         L.marker([lat, lon]).addTo(map).bindPopup(name);
     });
+
+    (function() {
+        var ASTRA1_LON = 19.2;
+        var R_earth = 6371;
+        var R_sat = 42164;
+        function toRad(d) { return d * Math.PI / 180; }
+        function toDeg(r) { return r * 180 / Math.PI; }
+        function elevationAzimuth(lat, lon) {
+            var latRad = toRad(lat);
+            var dLonRad = toRad(ASTRA1_LON - lon);
+            var cosLat = Math.cos(latRad);
+            var cosD = Math.cos(dLonRad);
+            var ratio = R_earth / R_sat;
+            var N = cosLat * cosD - ratio;
+            var D = Math.sqrt(1 - cosLat * cosLat * cosD * cosD);
+            var elRad = Math.atan2(N, D);
+            var el = toDeg(elRad);
+            var tanEl = Math.tan(elRad);
+            var azRad = Math.atan2(Math.sin(dLonRad), cosLat * tanEl / cosD - Math.tan(latRad));
+            var az = toDeg(azRad);
+            if (az < 0) az += 360;
+            return { elevation: el, azimuth: az };
+        }
+        document.querySelectorAll('.line-of-sight').forEach(function(block) {
+            var lat = parseFloat(block.getAttribute('data-lat'));
+            var lon = parseFloat(block.getAttribute('data-lon'));
+            if (isNaN(lat) || isNaN(lon)) return;
+            var id = block.id.replace('los-', '');
+            var needle = document.getElementById('los-needle-' + id);
+            var azEl = document.getElementById('los-az-' + id);
+            var elEl = document.getElementById('los-el-' + id);
+            var angles = elevationAzimuth(lat, lon);
+            if (needle) needle.setAttribute('transform', 'rotate(' + angles.azimuth + ' 50 50)');
+            if (azEl) azEl.textContent = Math.round(angles.azimuth) + '°';
+            if (elEl) {
+                elEl.textContent = angles.elevation < 0 ? 'onder horizon (niet zichtbaar)' : Math.round(angles.elevation) + '°';
+                if (angles.elevation < 0) elEl.style.color = 'var(--muted)';
+            }
+        });
+    })();
     </script>
 </body>
 </html>
